@@ -1,16 +1,36 @@
-# This is a sample Python script.
+#url = 'https://www.opensecrets.org/members-of-congress/members-list?cong_no=118&cycle=2024&sort=N'
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+service = Service(ChromeDriverManager().install())
+
+driver = webdriver.Chrome(service=service)
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+driver.get('https://www.opensecrets.org/members-of-congress/members-list?cong_no=118&cycle=2024&sort=N')
+print('Page title', driver.title)
+html_content = driver.page_source
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+# This will get the page with all of the basic information
+soup = BeautifulSoup(html_content, 'html.parser')
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+# Table with all representatives
+table_body = soup.find('tbody')
+
+
+# # Getting all the rows with the congress people info including names party, and some financials for example
+for row in table_body:
+    congress_people_basic_info = soup.find_all('tr')
+
+
+print(congress_people_basic_info[1:-1])
+
+
+
+driver.close()
+driver.quit()
+
+
