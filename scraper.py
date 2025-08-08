@@ -3,6 +3,8 @@ from helpers.data_cleaners import parse_currency_string
 from helpers.parsers import scrape_individual_page
 
 
+
+# This is where we will be implementing pagination
 congress_information = []
 base_url = 'https://www.opensecrets.org'
 for entry in congress_people_basic_info[1:-1]:

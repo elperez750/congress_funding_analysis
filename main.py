@@ -3,6 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+from helpers.parsers import *
 
 service = Service(ChromeDriverManager().install())
 
@@ -21,9 +22,13 @@ soup = BeautifulSoup(html_content, 'html.parser')
 table_body = soup.find('tbody')
 
 
+
+congress_people_basic_info = None
 # # Getting all the rows with the congress people info including names party, and some financials for example
 for row in table_body:
     congress_people_basic_info = soup.find_all('tr')
+
+
 
 
 print(congress_people_basic_info[1:-1])
