@@ -1,16 +1,18 @@
 # creating a function that will in charge of scraping from the other page
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
 from helpers.data_cleaners import *
 from scraper import member_information
-import time
+import re
 
-def get_contributor_data(driver):
-    total_vs_avg_list = []
+
+def parse_raised_by_year(driver):
+    total_vs_avg_obj = {
+        'total_vs_avg_raised': []
+    }
 
     # This will get the plot group dynamically (any number instead of hardcoding 81)
     chart_for_earned = WebDriverWait(driver, 10).until(
@@ -41,13 +43,11 @@ def get_contributor_data(driver):
                 continue
 
             # Extract and clean the data
-
-
             year = convert_two_digit_year(data_divs[3].text.split(',')[1])
             total_raised_by_member = parse_abbreviated_number(data_divs[3].text.split(',')[2])
             average_raised_by_member = parse_abbreviated_number(data_divs[0].text.split(',')[-1])
 
-            total_vs_avg_list.append({
+            total_vs_avg_obj['total_vs_avg_raised'].append({
                 'year': year,
                 'total_raised_by_congressman': total_raised_by_member,
                 'average_raised': average_raised_by_member
@@ -57,15 +57,14 @@ def get_contributor_data(driver):
             print("Tooltip did not appear:", e)
             continue
 
-    return total_vs_avg_list
+    return total_vs_avg_obj
 
 '''
 This is responsible for getting the first and last election if applicable.
 
 Sometimes the final entry is next election or about to retire. For that we call the column election type
 '''
-def get_election_details(individual_soup):
-
+def parse_election_details(individual_soup):
     election_dates = individual_soup.find_all('div', class_="Congress--profile-timeline-item")
     election_object = {
         'first_election': None,
@@ -97,7 +96,13 @@ def get_election_details(individual_soup):
 '''
 This will basically give us the names and amounts of the top industries and contributors for this member
 '''
-def set_top_industry_and_contributor(individual_soup):
+def parse_top_ic(individual_soup):
+    top_ic_data = {
+        'top_industry': None,
+        'top_contributor': None,
+        'top_industry_number': None,
+        'top_contributor_number': None,
+    }
 
     # This will basically give us all the numbers
     top_industries_contributors_numbers = individual_soup.find_all('div',
@@ -107,18 +112,26 @@ def set_top_industry_and_contributor(individual_soup):
     top_industries_contributor_names = individual_soup.find_all('div',
                                                                 class_="Congress--profile-top-numbers--info--stats-name")
 
-    member_information[20]['top_industry'] = top_industries_contributor_names[0].text
-    member_information[20]['top_contributor'] = top_industries_contributor_names[1].text
 
-    # Getting the numbers for the industry and contributor
-    member_information[20]['top_industry_number'] = parse_currency_string(top_industries_contributors_numbers[0].text)
-    member_information[20]['top_contributor_number'] = parse_currency_string(top_industries_contributors_numbers[1].text)
+    top_ic_data['top_industry'] = top_industries_contributor_names[0].text
+    top_ic_data['top_contributor'] = top_industries_contributor_names[1].text
 
 
+    top_ic_data['top_industry_number'] = top_industries_contributors_numbers[0].text
+    top_ic_data['top_contributor_number'] = top_industries_contributors_numbers[1].text
 
-def set_all_contributors_and_industries(individual_soup):
-    top_contributors_list = []
-    top_industries_list = []
+    return top_ic_data
+
+
+
+def parse_ic_tables(individual_soup):
+
+    # This will contain the contributors and industries list for the member
+    all_ic_obj = {
+        "all_industries": [],
+        "all_contributors": [],
+    }
+
     tables_for_individual_page = individual_soup.find_all('table', class_="js-scrollable")
 
     contributor_table = tables_for_individual_page[0]
@@ -130,14 +143,13 @@ def set_all_contributors_and_industries(individual_soup):
         if not contributor_row:
             continue
 
-        top_contributors_object['Contributor'] = contributor_row[0].text
+        top_contributors_object['contributor'] = contributor_row[0].text
         top_contributors_object['total'] = contributor_row[1].text
         top_contributors_object['individuals'] = contributor_row[2].text
         top_contributors_object['pacs'] = contributor_row[3].text
 
-        top_contributors_list.append(top_contributors_object)
+        all_ic_obj['all_contributors'].append(top_contributors_object)
 
-    member_information[2]['top_contributors'] = top_contributors_list
 
     for tr in industries_table.find_all('tr'):
 
@@ -153,15 +165,17 @@ def set_all_contributors_and_industries(individual_soup):
         top_industries_object['individuals'] = industry_row[2].text
         top_industries_object['pacs'] = industry_row[3].text
 
-        top_industries_list.append(top_industries_object)
+        all_ic_obj['all_industries'].append(top_industries_object)
 
-        # The index will be changed dynamically soon
-    member_information[2]['top_industries'] = top_industries_list
+    return all_ic_obj
 
-def set_contributions(individual_soup):
+
+def parse_sources_of_funds(individual_soup):
     table_for_contributions = individual_soup.find_all('div', class_="HorizontalStackedBar")
+    source_of_funds_obj = {
+        'funding_type': []
+    }
 
-    all_contribution_data = []
     for div_element in table_for_contributions:
 
         trs_in_div = div_element.find_all('tr')
@@ -173,40 +187,53 @@ def set_contributions(individual_soup):
             contribution_amount = cells[1].text
             contribution_percent = cells[2].text
 
+
+
+
             contribution_data['contribution_type'] = clean_key(contribution_type)
             contribution_data['contribution_amount'] = parse_currency_string(contribution_amount.strip())
             contribution_data['contribution_percent'] = int(float(contribution_percent.strip().strip('%')))
 
-            all_contribution_data.append(contribution_data)
-
-        member_information[2]['all_contribution_data'] = all_contribution_data
+            source_of_funds_obj['funding_type'].append(contribution_data)
 
 
+    return source_of_funds_obj
 
-def scrape_individual_page(driver, link_congressman):
 
+
+
+
+
+def scrape_member_page(driver, link_congressman):
     # This is responsible for getting us to the individual member page
     driver.get("about:blank")  # Clear any existing state
     driver.get(link_congressman)
-    page_title = driver.title
     individual_page_src = driver.page_source
     individual_soup = BeautifulSoup(individual_page_src, 'html.parser')
 
 
+    top_ic_data = parse_top_ic(individual_soup)
+    all_ic_data = parse_ic_tables(individual_soup)
+    all_funding = parse_sources_of_funds(individual_soup)
+    election_info = parse_election_details(individual_soup)
+    raised_by_year = parse_raised_by_year(driver)
+    
+    
+    member = {}
+    member.update(top_ic_data)
+    member.update(all_ic_data)
+    member.update(all_funding)
+    member.update(raised_by_year)
+    member.update(election_info)
 
-    member_information[2]['raised_by_year'] = get_contributor_data(driver)
-    election_info = get_election_details(individual_soup)
-    member_information[2].update(election_info)
 
-
-    set_top_industry_and_contributor(individual_soup)
-    set_all_contributors_and_industries(individual_soup)
-    set_contributions(individual_soup)
+    return member
 
 
 
 
 
 
-print(scrape_individual_page(member_information[2]['link']))
-print(member_information[2])
+
+
+
