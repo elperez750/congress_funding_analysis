@@ -5,7 +5,6 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from bs4 import BeautifulSoup
 from helpers.data_cleaners import *
-from scraper import member_information
 import re
 
 
@@ -105,7 +104,7 @@ def parse_top_ic(individual_soup):
     }
 
     # This will basically give us all the numbers
-    top_industries_contributors_numbers = individual_soup.find_all('div',
+    top_industries_contributor_numbers = individual_soup.find_all('div',
                                                                    class_="Congress--profile-top-numbers--info--stats-number")
 
     # This will give us the names
@@ -113,12 +112,16 @@ def parse_top_ic(individual_soup):
                                                                 class_="Congress--profile-top-numbers--info--stats-name")
 
 
-    top_ic_data['top_industry'] = top_industries_contributor_names[0].text
-    top_ic_data['top_contributor'] = top_industries_contributor_names[1].text
+    if top_industries_contributor_names:
+        top_ic_data['top_industry'] = top_industries_contributor_names[0].text
+        top_ic_data['top_contributor'] = top_industries_contributor_names[1].text
 
 
-    top_ic_data['top_industry_number'] = top_industries_contributors_numbers[0].text
-    top_ic_data['top_contributor_number'] = top_industries_contributors_numbers[1].text
+
+    if top_industries_contributor_numbers:
+        top_ic_data['top_industry_number'] = top_industries_contributor_numbers[0].text
+        top_ic_data['top_contributor_number'] = top_industries_contributor_numbers[1].text
+
 
     return top_ic_data
 
@@ -133,39 +136,43 @@ def parse_ic_tables(individual_soup):
     }
 
     tables_for_individual_page = individual_soup.find_all('table', class_="js-scrollable")
+    
+    if tables_for_individual_page:
+    
+        contributor_table = tables_for_individual_page[0]
+        industries_table = tables_for_individual_page[1]
+    
+        for tr in contributor_table.find_all('tr'):
+            top_contributors_object = {}
+            contributor_row = tr.find_all('td')
+            if not contributor_row:
+                continue
+    
+            top_contributors_object['contributor'] = contributor_row[0].text
+            top_contributors_object['total'] = contributor_row[1].text
+            top_contributors_object['individuals'] = contributor_row[2].text
+            top_contributors_object['pacs'] = contributor_row[3].text
+    
+            all_ic_obj['all_contributors'].append(top_contributors_object)
+    
+    
+        for tr in industries_table.find_all('tr'):
+    
+            top_industries_object = {}
+    
+            industry_row = tr.find_all('td')
+    
+            if not industry_row:
+                continue
+    
+            top_industries_object['industry'] = industry_row[0].text
+            top_industries_object['total'] = industry_row[1].text
+            top_industries_object['individuals'] = industry_row[2].text
+            top_industries_object['pacs'] = industry_row[3].text
+    
+            all_ic_obj['all_industries'].append(top_industries_object)
 
-    contributor_table = tables_for_individual_page[0]
-    industries_table = tables_for_individual_page[1]
-
-    for tr in contributor_table.find_all('tr'):
-        top_contributors_object = {}
-        contributor_row = tr.find_all('td')
-        if not contributor_row:
-            continue
-
-        top_contributors_object['contributor'] = contributor_row[0].text
-        top_contributors_object['total'] = contributor_row[1].text
-        top_contributors_object['individuals'] = contributor_row[2].text
-        top_contributors_object['pacs'] = contributor_row[3].text
-
-        all_ic_obj['all_contributors'].append(top_contributors_object)
-
-
-    for tr in industries_table.find_all('tr'):
-
-        top_industries_object = {}
-
-        industry_row = tr.find_all('td')
-
-        if not industry_row:
-            continue
-
-        top_industries_object['industry'] = industry_row[0].text
-        top_industries_object['total'] = industry_row[1].text
-        top_industries_object['individuals'] = industry_row[2].text
-        top_industries_object['pacs'] = industry_row[3].text
-
-        all_ic_obj['all_industries'].append(top_industries_object)
+        
 
     return all_ic_obj
 
@@ -176,25 +183,29 @@ def parse_sources_of_funds(individual_soup):
         'funding_type': []
     }
 
-    for div_element in table_for_contributions:
 
-        trs_in_div = div_element.find_all('tr')
-        for td in trs_in_div:
-            contribution_data = {}
-            cells = td.find_all('td')
+    if table_for_contributions:
 
-            contribution_type = cells[0].text
-            contribution_amount = cells[1].text
-            contribution_percent = cells[2].text
+        for div_element in table_for_contributions:
+
+            trs_in_div = div_element.find_all('tr')
+            for td in trs_in_div:
+                contribution_data = {}
+                cells = td.find_all('td')
+
+                contribution_type = cells[0].text
+                contribution_amount = cells[1].text
+                contribution_percent = cells[2].text
 
 
 
 
-            contribution_data['contribution_type'] = clean_key(contribution_type)
-            contribution_data['contribution_amount'] = parse_currency_string(contribution_amount.strip())
-            contribution_data['contribution_percent'] = int(float(contribution_percent.strip().strip('%')))
+                contribution_data['contribution_type'] = clean_key(contribution_type)
+                contribution_data['contribution_amount'] = parse_currency_string(contribution_amount.strip())
+                contribution_data['contribution_percent'] = int(float(contribution_percent.strip().strip('%')))
 
-            source_of_funds_obj['funding_type'].append(contribution_data)
+                source_of_funds_obj['funding_type'].append(contribution_data)
+
 
 
     return source_of_funds_obj
