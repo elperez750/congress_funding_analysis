@@ -28,6 +28,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-notebooks
+
 01_data_exploration.ipynb
-.ipynb
